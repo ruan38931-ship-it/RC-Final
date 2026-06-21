@@ -73,8 +73,12 @@ function showPage(pageName) {
     document.getElementById('adminEmployeeName').textContent = currentUser.name;
     updateAdminStats();
     generateQRCode();
+    document.getElementById('btnFaleConosco').classList.add('hidden');
   } else if (pageName === 'cliente') {
     document.getElementById('customerName').textContent = currentUser.name;
+    document.getElementById('btnFaleConosco').classList.remove('hidden');
+  } else {
+    document.getElementById('btnFaleConosco').classList.add('hidden');
   }
 }
 
@@ -189,23 +193,61 @@ function openCompleteModal(orderId) {
 
 async function confirmCompleteOrder() {
   const amount = parseFloat(document.getElementById('completeAmount').value);
+  const paymentMethod = document.getElementById('completePaymentMethod').value;
+  
   if (isNaN(amount) || amount < 0) {
     showToast('Informe um valor válido', 'error');
     return;
   }
 
+  const order = orders.find(o => o.id === orderToComplete);
+
   try {
     await db.collection("orders").doc(orderToComplete).update({
       status: 'archive',
       amount: amount,
+      paymentMethod: paymentMethod,
       completedAt: new Date().toISOString()
     });
     
     document.getElementById('completeModal').classList.remove('active');
     document.getElementById('completeAmount').value = '';
     showToast('Serviço finalizado e arquivado!');
+
+    // Gerar Recibo WhatsApp
+    generateWhatsAppReceipt(order, amount, paymentMethod);
+
   } catch (error) {
     showToast('Erro ao finalizar serviço', 'error');
+  }
+}
+
+function generateWhatsAppReceipt(order, amount, method) {
+  const methodLabels = {
+    'dinheiro': 'Dinheiro (Espécie)',
+    'pix': 'Pix',
+    'cartao_credito': 'Cartão de Crédito',
+    'cartao_debito': 'Cartão de Débito',
+    'crediario': 'Crediário'
+  };
+
+  const message = encodeURIComponent(
+    `*RECIBO DE PAGAMENTO - RC CELULARES*\n\n` +
+    `Olá, *${order.customerName}*!\n` +
+    `Seu serviço foi finalizado com sucesso.\n\n` +
+    `*Dispositivo:* ${order.device}\n` +
+    `*Defeito:* ${order.defect}\n` +
+    `*Valor:* R$ ${amount.toFixed(2)}\n` +
+    `*Forma de Pagamento:* ${methodLabels[method]}\n` +
+    `*Data:* ${new Date().toLocaleDateString('pt-BR')}\n\n` +
+    `Agradecemos a preferência! 📱✨`
+  );
+
+  const phone = order.customerPhone.replace(/\D/g, '');
+  const url = `https://wa.me/55${phone}?text=${message}`;
+  
+  if (confirm('Deseja enviar o recibo via WhatsApp para o cliente?')) {
+    window.open(url, '_blank');
   }
 }
 
@@ -358,7 +400,10 @@ function renderOrderCard(order, isAdmin) {
 
       ${order.status === 'archive' ? `
         <div class="mt-4 pt-4 flex justify-between items-center" style="border-top: 1px dashed var(--border)">
-          <span class="text-sm font-bold text-green-600">Valor: R$ ${order.amount.toFixed(2)}</span>
+          <div>
+            <span class="text-sm font-bold text-green-600">Valor: R$ ${order.amount.toFixed(2)}</span>
+            <span class="payment-badge payment-${order.paymentMethod}">${order.paymentMethod ? order.paymentMethod.replace('_', ' ') : 'dinheiro'}</span>
+          </div>
           <span class="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full font-bold">PAGO</span>
         </div>
       ` : ''}
@@ -443,6 +488,19 @@ function updateAdminStats() {
     })
     .reduce((acc, o) => acc + o.amount, 0);
 
+  // Totais por forma de pagamento (Livro Caixa)
+  const payments = {
+    dinheiro: 0,
+    pix: 0,
+    cartao_credito: 0,
+    cartao_debito: 0,
+    crediario: 0
+  };
+  completedOrders.forEach(o => {
+    const method = o.paymentMethod || 'dinheiro';
+    payments[method] += o.amount;
+  });
+
   // Renderizar estatísticas na aba Arquivo
   const archiveContainer = document.getElementById('admin-tab-archive');
   if (archiveContainer) {
@@ -478,8 +536,37 @@ function updateAdminStats() {
         </div>
       </div>
 
+      <!-- Livro Caixa -->
+      <div class="card mb-6" style="border-left: 4px solid var(--brand-red)">
+        <div class="card-header"><div class="card-title">💵 Livro Caixa (Resumo por Pagamento)</div></div>
+        <div class="card-content">
+          <div class="grid grid-2 gap-4">
+            <div class="p-3 bg-green-50 rounded border border-green-100">
+              <div class="text-xs font-bold text-green-700 uppercase">Dinheiro (Espécie)</div>
+              <div class="text-lg font-bold">R$ ${payments.dinheiro.toFixed(2)}</div>
+            </div>
+            <div class="p-3 bg-cyan-50 rounded border border-cyan-100">
+              <div class="text-xs font-bold text-cyan-700 uppercase">Pix</div>
+              <div class="text-lg font-bold">R$ ${payments.pix.toFixed(2)}</div>
+            </div>
+            <div class="p-3 bg-red-50 rounded border border-red-100">
+              <div class="text-xs font-bold text-red-700 uppercase">Cartão de Crédito</div>
+              <div class="text-lg font-bold">R$ ${payments.cartao_credito.toFixed(2)}</div>
+            </div>
+            <div class="p-3 bg-orange-50 rounded border border-orange-100">
+              <div class="text-xs font-bold text-orange-700 uppercase">Cartão de Débito</div>
+              <div class="text-lg font-bold">R$ ${payments.cartao_debito.toFixed(2)}</div>
+            </div>
+            <div class="p-3 bg-purple-50 rounded border border-purple-100">
+              <div class="text-xs font-bold text-purple-700 uppercase">Crediário</div>
+              <div class="text-lg font-bold">R$ ${payments.crediario.toFixed(2)}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="card mb-6">
-        <div class="card-header"><div class="card-title">Dispositivos Mais Atendidos</div></div>
+        <div class="card-header"><div class="card-title">📱 Dispositivos Mais Atendidos</div></div>
         <div class="card-content">
           ${topDevices.map(([name, count], i) => `
             <div class="flex items-center justify-between p-2 mb-2 bg-gray-50 rounded">
@@ -494,7 +581,7 @@ function updateAdminStats() {
       </div>
 
       <div class="card">
-        <div class="card-header"><div class="card-title">Histórico Completo (${completedOrders.length})</div></div>
+        <div class="card-header"><div class="card-title">📜 Histórico Completo (${completedOrders.length})</div></div>
         <div class="card-content space-y-4">
           ${completedOrders.map(o => renderOrderCard(o, true)).join('')}
         </div>
