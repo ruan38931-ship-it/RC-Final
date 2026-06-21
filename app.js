@@ -262,43 +262,52 @@ function openCompleteModal(orderId) {
 }
 
 async function confirmCompleteOrder() {
+  console.log("Iniciando finalização da ordem:", orderToComplete);
+  
   const amountInput = document.getElementById('completeAmount');
+  const methodSelect = document.getElementById('completePaymentMethod');
+  
+  if (!amountInput || !methodSelect) {
+    console.error("Elementos do modal não encontrados");
+    return;
+  }
+
   const amount = parseFloat(amountInput.value);
-  const method = document.getElementById('completePaymentMethod').value;
+  const method = methodSelect.value;
   
   if (isNaN(amount) || amount < 0) {
     showToast('Informe um valor válido', 'error');
     return;
   }
 
-  // Busca a ordem ANTES de qualquer alteração para garantir os dados do recibo
-  let order = orders.find(o => String(o.id) === String(orderToComplete));
-  
-  if (!order) {
+  // Busca a ordem com cópia profunda para garantir que os dados não sumam
+  const orderIndex = orders.findIndex(o => String(o.id) === String(orderToComplete));
+  if (orderIndex === -1) {
     showToast('Erro: Ordem não localizada', 'error');
     return;
   }
+  
+  const orderCopy = JSON.parse(JSON.stringify(orders[orderIndex]));
 
   try {
+    const completedAt = new Date().toISOString();
+    
     if (useFirebase) {
       await db.collection("orders").doc(String(orderToComplete)).update({
         status: 'archive',
         amount: amount,
         paymentMethod: method,
-        completedAt: new Date().toISOString()
+        completedAt: completedAt
       });
     } else {
-      const idx = orders.findIndex(o => String(o.id) === String(orderToComplete));
-      if (idx !== -1) {
-        orders[idx].status = 'archive';
-        orders[idx].amount = amount;
-        orders[idx].paymentMethod = method;
-        orders[idx].completedAt = new Date().toISOString();
-        saveData();
-      }
+      orders[orderIndex].status = 'archive';
+      orders[orderIndex].amount = amount;
+      orders[orderIndex].paymentMethod = method;
+      orders[orderIndex].completedAt = completedAt;
+      saveData();
     }
 
-    // Fecha o modal
+    // Fecha o modal e limpa o campo
     const modal = document.getElementById('completeModal');
     if (modal) {
       modal.classList.remove('active');
@@ -308,14 +317,12 @@ async function confirmCompleteOrder() {
     
     showToast('Serviço finalizado!');
     
-    // Pequeno delay para garantir que a UI atualizou antes de abrir o WhatsApp
-    setTimeout(() => {
-      generateWhatsAppReceipt(order, amount, method);
-    }, 500);
+    // Chama o recibo imediatamente após o sucesso do salvamento
+    generateWhatsAppReceipt(orderCopy, amount, method);
 
   } catch (error) {
     console.error("Erro ao finalizar ordem:", error);
-    showToast('Erro ao salvar no banco de dados', 'error');
+    showToast('Erro ao salvar: ' + error.message, 'error');
   }
 }
 
