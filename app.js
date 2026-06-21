@@ -572,6 +572,82 @@ function setupEventListeners() {
     navigator.clipboard.writeText(window.location.href);
     showToast('Link copiado!');
   });
+  // ============================================
+// RC Celulares - App.js
+// ============================================
+
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('Sistema RC Celulares carregado');
+
+  // ==================== MODAL DE FINALIZAÇÃO ====================
+  const completeModal = document.getElementById('completeModal');
+  const btnCancelComplete = document.getElementById('btnCancelComplete');
+  const btnConfirmComplete = document.getElementById('btnConfirmComplete');
+  const completeAmount = document.getElementById('completeAmount');
+  const completeOrderDevice = document.getElementById('completeOrderDevice');
+  const completeOrderCustomer = document.getElementById('completeOrderCustomer');
+
+  let orderToComplete = null;
+
+  // Função para abrir o modal de finalização
+  window.openCompleteModal = function(order) {
+    orderToComplete = order;
+    
+    completeOrderDevice.textContent = order.device || 'Dispositivo não informado';
+    completeOrderCustomer.textContent = order.customer || 'Cliente não informado';
+    
+    completeAmount.value = '';
+    completeModal.style.display = 'flex';
+    completeAmount.focus();
+  };
+
+  // Fechar modal
+  function closeCompleteModal() {
+    completeModal.style.display = 'none';
+    orderToComplete = null;
+  }
+
+  btnCancelComplete.addEventListener('click', closeCompleteModal);
+
+  // Confirmar finalização
+  btnConfirmComplete.addEventListener('click', () => {
+    const amount = parseFloat(completeAmount.value);
+
+    if (!amount || amount <= 0) {
+      alert('Por favor, informe um valor válido para o serviço.');
+      completeAmount.focus();
+      return;
+    }
+
+    if (orderToComplete) {
+      console.log(`Ordem finalizada: ${orderToComplete.id} - Valor: R$ ${amount.toFixed(2)}`);
+      
+      // Aqui você pode chamar sua função de atualizar no Firebase
+      // updateOrderStatus(orderToComplete.id, 'completed', amount);
+      
+      alert(`Ordem finalizada com sucesso!\nValor cobrado: R$ ${amount.toFixed(2)}`);
+      closeCompleteModal();
+      
+      // Recarregar lista de ordens (você pode chamar uma função refresh aqui)
+      // loadOrders();
+    }
+  });
+
+  // Fechar modal ao clicar fora
+  completeModal.addEventListener('click', (e) => {
+    if (e.target === completeModal) {
+      closeCompleteModal();
+    }
+  });
+
+  // Permitir fechar com ESC
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && completeModal.style.display === 'flex') {
+      closeCompleteModal();
+    }
+  });
+
+});
 }
 
 // Iniciar
