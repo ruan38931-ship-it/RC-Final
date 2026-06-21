@@ -580,87 +580,142 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('✅ Sistema RC Celulares carregado');
 
   // ==================== MODAL DE FINALIZAÇÃO ====================
+ document.addEventListener('DOMContentLoaded', () => {
+  console.log('✅ Sistema RC Celulares carregado');
+
+  // Modais
   const completeModal = document.getElementById('completeModal');
+  const receiptModal = document.getElementById('receiptModal');
   const btnCancelComplete = document.getElementById('btnCancelComplete');
   const btnConfirmComplete = document.getElementById('btnConfirmComplete');
   const completeAmount = document.getElementById('completeAmount');
   const completeOrderDevice = document.getElementById('completeOrderDevice');
   const completeOrderCustomer = document.getElementById('completeOrderCustomer');
+  const receiptContent = document.getElementById('receiptContent');
 
   let orderToComplete = null;
+
+  // Formas de pagamento
+  const paymentMethods = [
+    { value: "pix", label: "PIX" },
+    { value: "credito", label: "Cartão de Crédito" },
+    { value: "debito", label: "Cartão de Débito" },
+    { value: "especie", label: "Em Espécie" },
+    { value: "crediario", label: "Crediário" }
+  ];
+
+  // Preencher opções de pagamento
+  function renderPaymentOptions() {
+    const container = document.getElementById('paymentOptions');
+    container.innerHTML = paymentMethods.map(pm => `
+      <label class="payment-option">
+        <input type="radio" name="paymentMethod" value="${pm.value}" ${pm.value === 'pix' ? 'checked' : ''}>
+        <span>${pm.label}</span>
+      </label>
+    `).join('');
+  }
+  renderPaymentOptions();
 
   // Abrir modal de finalização
   window.openCompleteModal = function(order) {
     orderToComplete = order;
-    
-    completeOrderDevice.textContent = order.device || 'Dispositivo não informado';
-    completeOrderCustomer.textContent = order.customer || 'Cliente não informado';
-    
-    completeAmount.value = order.value || '';
+    completeOrderDevice.textContent = order.device || '-';
+    completeOrderCustomer.textContent = order.customer || '-';
+    completeAmount.value = '';
     completeModal.style.display = 'flex';
     completeAmount.focus();
-    completeAmount.select();
   };
 
-  // Fechar modal
   function closeCompleteModal() {
     completeModal.style.display = 'none';
-    orderToComplete = null;
   }
 
   btnCancelComplete.addEventListener('click', closeCompleteModal);
 
-  // Confirmar finalização
+  // Confirmar finalização e gerar recibo
   btnConfirmComplete.addEventListener('click', () => {
     const amount = parseFloat(completeAmount.value);
     const paymentMethod = document.querySelector('input[name="paymentMethod"]:checked')?.value;
 
     if (!amount || amount <= 0) {
-      alert('⚠️ Por favor, informe um valor válido.');
-      completeAmount.focus();
+      alert('Por favor, informe um valor válido.');
       return;
     }
-
     if (!paymentMethod) {
-      alert('⚠️ Selecione uma forma de pagamento.');
+      alert('Selecione uma forma de pagamento.');
       return;
     }
 
     const paymentNames = {
-      pix: 'PIX',
-      credito: 'Cartão de Crédito',
-      debito: 'Cartão de Débito',
-      especie: 'Em Espécie',
-      crediario: 'Crediário'
+      pix: 'PIX', credito: 'Cartão de Crédito', debito: 'Cartão de Débito',
+      especie: 'Em Espécie', crediario: 'Crediário'
     };
 
-    if (orderToComplete) {
-      console.log(`Ordem finalizada: ${orderToComplete.id} | Valor: R$ ${amount.toFixed(2)} | Pagamento: ${paymentNames[paymentMethod]}`);
-      
-      // Aqui futuramente você vai salvar no Firebase
-      // saveCompletedOrder(orderToComplete.id, amount, paymentMethod);
+    // Gerar recibo
+    generateReceipt(orderToComplete, amount, paymentMethod, paymentNames[paymentMethod]);
 
-      alert(`✅ Ordem finalizada com sucesso!\n\n` +
-            `Valor: R$ ${amount.toFixed(2)}\n` +
-            `Forma de Pagamento: ${paymentNames[paymentMethod]}`);
-
-      closeCompleteModal();
-      // loadOrders(); // Recarregar lista
-    }
+    closeCompleteModal();
   });
 
-  // Fechar clicando fora
-  completeModal.addEventListener('click', (e) => {
-    if (e.target === completeModal) closeCompleteModal();
+  // Gerar Recibo Digital
+  function generateReceipt(order, amount, methodValue, methodName) {
+    const date = new Date().toLocaleDateString('pt-BR', { 
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+    });
+
+    const receiptHTML = `
+      <div style="text-align: center; font-family: monospace;">
+        <h2 style="margin: 0; color: #ef4444;">RC CELULARES</h2>
+        <p style="margin: 4px 0; font-size: 0.9rem;">Assistência Técnica</p>
+        <p style="margin: 8px 0; font-size: 0.8rem;">CNPJ: XX.XXX.XXX/XXXX-XX</p>
+        <hr style="margin: 12px 0; border: none; border-top: 1px dashed #ccc;">
+        
+        <h3 style="margin: 12px 0;">RECIBO DE SERVIÇO</h3>
+        
+        <div style="text-align: left; font-size: 0.9rem; line-height: 1.6;">
+          <strong>Data:</strong> ${date}<br>
+          <strong>Cliente:</strong> ${order.customer || '-'}<br>
+          <strong>Dispositivo:</strong> ${order.device || '-'}<br>
+          <strong>Defeito:</strong> ${order.defect || '-'}<br>
+          <strong>Técnico:</strong> ${order.technician || '-'}<br><br>
+          
+          <strong>Valor Total:</strong> <span style="font-size: 1.3rem; color: #16a34a;">R$ ${amount.toFixed(2)}</span><br>
+          <strong>Forma de Pagamento:</strong> ${methodName}<br>
+        </div>
+        
+        <hr style="margin: 15px 0; border: none; border-top: 1px dashed #ccc;">
+        <p style="font-size: 0.8rem; margin: 8px 0;">Obrigado pela preferência!</p>
+        <p style="font-size: 0.75rem; color: #666;">Recibo digital - ${order.id || 'N/A'}</p>
+      </div>
+    `;
+
+    receiptContent.innerHTML = receiptHTML;
+    receiptModal.style.display = 'flex';
+  }
+
+  // Fechar recibo
+  document.getElementById('btnCloseReceipt').addEventListener('click', () => {
+    receiptModal.style.display = 'none';
   });
 
-  // Fechar com ESC
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && completeModal.style.display === 'flex') {
-      closeCompleteModal();
-    }
+  // Imprimir recibo
+  document.getElementById('btnPrintReceipt').addEventListener('click', () => {
+    const printContent = document.getElementById('receiptContent').innerHTML;
+    const originalContent = document.body.innerHTML;
+
+    document.body.innerHTML = `
+      <div style="padding: 20px; max-width: 600px; margin: 0 auto;">
+        ${printContent}
+      </div>
+    `;
+    window.print();
+    document.body.innerHTML = originalContent;
+    location.reload(); // Recarrega para restaurar eventos
   });
 
+  // Fechar modais clicando fora
+  completeModal.addEventListener('click', e => { if (e.target === completeModal) closeCompleteModal(); });
+  receiptModal.addEventListener('click', e => { if (e.target === receiptModal) receiptModal.style.display = 'none'; });
 });
    
 }
