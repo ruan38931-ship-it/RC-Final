@@ -359,43 +359,68 @@ function renderCustomerOrders() {
   const active = clientOrders.filter(o => o.status !== 'archive');
   const completed = clientOrders.filter(o => o.status === 'archive');
 
-  document.getElementById('customerActiveCount').textContent = active.length;
-  document.getElementById('customerCompletedCount').textContent = completed.length;
+  const tabsContainer = document.getElementById('customerTabs');
+  const noOrdersContainer = document.getElementById('customerNoOrders');
+
+  if (clientOrders.length > 0) {
+    if(tabsContainer) tabsContainer.classList.remove('hidden');
+    if(noOrdersContainer) noOrdersContainer.classList.add('hidden');
+  } else {
+    if(tabsContainer) tabsContainer.classList.add('hidden');
+    if(noOrdersContainer) noOrdersContainer.classList.remove('hidden');
+  }
+
+  const activeCountEl = document.getElementById('customerActiveCount');
+  const completedCountEl = document.getElementById('customerCompletedCount');
+  if(activeCountEl) activeCountEl.textContent = active.length;
+  if(completedCountEl) completedCountEl.textContent = completed.length;
   
-  document.getElementById('customer-tab-active').innerHTML = active.length ? active.map(o => renderOrderCard(o, false)).join('') : '<p class="text-center py-4">Nenhuma ordem ativa</p>';
-  document.getElementById('customer-tab-completed').innerHTML = completed.length ? completed.map(o => renderOrderCard(o, false)).join('') : '<p class="text-center py-4">Nenhuma ordem concluída</p>';
+  const activeTab = document.getElementById('customer-tab-active');
+  const completedTab = document.getElementById('customer-tab-completed');
+  
+  if(activeTab) activeTab.innerHTML = active.length ? active.map(o => renderOrderCard(o, false)).join('') : '<p class="text-center py-4">Nenhuma ordem ativa</p>';
+  if(completedTab) completedTab.innerHTML = completed.length ? completed.map(o => renderOrderCard(o, false)).join('') : '<p class="text-center py-4">Nenhuma ordem concluída</p>';
 }
 
 function renderOrderCard(order, isAdmin) {
   const statusLabels = { 'em-analise': 'Análise', 'em-manutencao': 'Manutenção', 'esperando-peca': 'Peças', 'pronto': 'Pronto', 'archive': 'Concluído' };
   const paymentLabels = { 'dinheiro': 'Dinheiro', 'pix': 'Pix', 'cartao_credito': 'Crédito', 'cartao_debito': 'Débito', 'crediario': 'Crediário' };
-  const createdDate = new Date(order.createdAt).toLocaleDateString('pt-BR');
+  const createdDate = order.createdAt ? new Date(order.createdAt).toLocaleDateString('pt-BR') : '--/--/----';
   
-  return `
+  let html = `
     <div class="order-card">
       <div class="flex justify-between mb-2">
         <h3 class="font-bold">${order.device}</h3>
-        <span class="status-badge status-${order.status}">${statusLabels[order.status]}</span>
+        <span class="status-badge status-${order.status}">${statusLabels[order.status] || order.status}</span>
       </div>
       <p class="text-sm mb-1"><strong>Cliente:</strong> ${order.customerName}</p>
       <p class="text-sm mb-1"><strong>Telefone:</strong> ${order.customerPhone}</p>
       <p class="text-sm mb-1"><strong>Técnico:</strong> ${order.technician}</p>
       <p class="text-sm mb-1"><strong>Data:</strong> ${createdDate}</p>
-      <p class="text-xs text-gray-500 mb-4"><strong>Defeito:</strong> ${order.defect}</p>
-      ${isAdmin && order.status !== 'archive' ? `
-        <div class="flex gap-2">
-          <select class="flex-1 text-xs p-1 border rounded" onchange="updateOrderStatus('${order.id}', this.value)">
-            <option value="em-analise" ${order.status === 'em-analise' ? 'selected' : ''}>Análise</option>
-            <option value="em-manutencao" ${order.status === 'em-manutencao' ? 'selected' : ''}>Manutenção</option>
-            <option value="esperando-peca" ${order.status === 'esperando-peca' ? 'selected' : ''}>Peças</option>
-            <option value="pronto" ${order.status === 'pronto' ? 'selected' : ''}>Pronto</option>
-          </select>
-          <button class="btn btn-primary btn-sm" style="background-color: #ef4444 !important;" onclick="openCompleteModal('${order.id}')">Finalizar</button>
-        </div>
-      ` : ''}
-      ${order.status === 'archive' ? `<div class="mt-3 pt-3 border-t text-sm font-bold text-green-600">✓ Serviço Concluído - Pago: R$ ${order.amount.toFixed(2)} (${paymentLabels[order.paymentMethod] || order.paymentMethod})</div>` : ''}
-    </div>
-  `;
+      <p class="text-xs text-gray-500 mb-4"><strong>Defeito:</strong> ${order.defect}</p>`;
+
+  if (isAdmin && order.status !== 'archive') {
+    html += `
+      <div class="flex gap-2">
+        <select class="flex-1 text-xs p-1 border rounded" onchange="updateOrderStatus('${order.id}', this.value)">
+          <option value="em-analise" ${order.status === 'em-analise' ? 'selected' : ''}>Análise</option>
+          <option value="em-manutencao" ${order.status === 'em-manutencao' ? 'selected' : ''}>Manutenção</option>
+          <option value="esperando-peca" ${order.status === 'esperando-peca' ? 'selected' : ''}>Peças</option>
+          <option value="pronto" ${order.status === 'pronto' ? 'selected' : ''}>Pronto</option>
+          <option value="finalizado">Finalizar</option>
+        </select>
+        <button class="btn btn-primary btn-sm" style="background-color: #ef4444 !important;" onclick="openCompleteModal('${order.id}')">Finalizar</button>
+      </div>`;
+  }
+
+  if (order.status === 'archive') {
+    const paymentMethod = paymentLabels[order.paymentMethod] || order.paymentMethod || 'Dinheiro';
+    const amount = order.amount ? order.amount.toFixed(2) : '0.00';
+    html += `<div class="mt-3 pt-3 border-t text-sm font-bold text-green-600">✓ Serviço Concluído - Pago: R$ ${amount} (${paymentMethod})</div>`;
+  }
+
+  html += `</div>`;
+  return html;
 }
 
 function renderEmployeeList() {
@@ -427,6 +452,7 @@ function updateAdminStats() {
 
   const archiveContainer = document.getElementById('admin-tab-archive');
   if (archiveContainer) {
+    const paymentLabels = { 'dinheiro': 'Dinheiro', 'pix': 'Pix', 'cartao_credito': 'Crédito', 'cartao_debito': 'Débito', 'crediario': 'Crediário' };
     archiveContainer.innerHTML = `
       <div class="stats-grid mb-4">
         <div class="stat-card"><h3>Total</h3><p>R$ ${revenue.toFixed(2)}</p></div>
