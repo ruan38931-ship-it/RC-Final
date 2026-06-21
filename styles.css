@@ -1300,3 +1300,44 @@ select {
 .status-select-wrapper select {
   flex: 1;
 }
+/* ============================================
+   BOTÃO FLUTUANTE WHATSAPP
+   ============================================ */
+.whatsapp-float {
+  position: fixed;
+  bottom: 25px;
+  right: 25px;
+  background: #25D366;
+  color: white;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(37, 211, 102, 0.4);
+  z-index: 1000;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 14px;
+  gap: 6px;
+}
+
+.whatsapp-float:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 16px rgba(37, 211, 102, 0.5);
+}
+
+.whatsapp-float svg {
+  margin-right: 2px;
+}
+
+/* Responsivo para celular */
+@media (max-width: 768px) {
+  .whatsapp-float {
+    width: 52px;
+    height: 52px;
+    font-size: 13px;
+  }
+}
