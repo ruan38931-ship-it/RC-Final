@@ -241,7 +241,8 @@ function openCompleteModal(orderId) {
 }
 
 async function confirmCompleteOrder() {
-  const amount = parseFloat(document.getElementById('completeAmount').value);
+  const amountInput = document.getElementById('completeAmount');
+  const amount = parseFloat(amountInput.value);
   const method = document.getElementById('completePaymentMethod').value;
   
   if (isNaN(amount) || amount < 0) {
@@ -249,38 +250,60 @@ async function confirmCompleteOrder() {
     return;
   }
 
-  // Busca flexível do ID para garantir que encontre a ordem para o recibo
-  const order = orders.find(o => String(o.id) === String(orderToComplete));
+  // Busca a ordem ANTES de qualquer alteração para garantir os dados do recibo
+  let order = orders.find(o => String(o.id) === String(orderToComplete));
+  
+  if (!order) {
+    showToast('Erro: Ordem não localizada', 'error');
+    return;
+  }
 
-  if (useFirebase) {
-    await db.collection("orders").doc(String(orderToComplete)).update({
-      status: 'archive',
-      amount: amount,
-      paymentMethod: method,
-      completedAt: new Date().toISOString()
-    });
-  } else {
-    const idx = orders.findIndex(o => String(o.id) === String(orderToComplete));
-    if (idx !== -1) {
-      orders[idx].status = 'archive';
-      orders[idx].amount = amount;
-      orders[idx].paymentMethod = method;
-      orders[idx].completedAt = new Date().toISOString();
-      saveData();
+  try {
+    if (useFirebase) {
+      await db.collection("orders").doc(String(orderToComplete)).update({
+        status: 'archive',
+        amount: amount,
+        paymentMethod: method,
+        completedAt: new Date().toISOString()
+      });
+    } else {
+      const idx = orders.findIndex(o => String(o.id) === String(orderToComplete));
+      if (idx !== -1) {
+        orders[idx].status = 'archive';
+        orders[idx].amount = amount;
+        orders[idx].paymentMethod = method;
+        orders[idx].completedAt = new Date().toISOString();
+        saveData();
+      }
     }
-  }
 
-  const modal = document.getElementById('completeModal');
-  if (modal) {
-    modal.classList.remove('active');
-    modal.style.display = 'none';
+    // Fecha o modal
+    const modal = document.getElementById('completeModal');
+    if (modal) {
+      modal.classList.remove('active');
+      modal.style.display = 'none';
+    }
+    amountInput.value = '';
+    
+    showToast('Serviço finalizado!');
+    
+    // Pequeno delay para garantir que a UI atualizou antes de abrir o WhatsApp
+    setTimeout(() => {
+      generateWhatsAppReceipt(order, amount, method);
+    }, 500);
+
+  } catch (error) {
+    console.error("Erro ao finalizar ordem:", error);
+    showToast('Erro ao salvar no banco de dados', 'error');
   }
-  document.getElementById('completeAmount').value = '';
-  showToast('Serviço finalizado!');
-  generateWhatsAppReceipt(order, amount, method);
 }
 
 function generateWhatsAppReceipt(order, amount, method) {
+  if (!order || !order.customerPhone) {
+    console.error("Dados da ordem incompletos para recibo:", order);
+    return;
+  }
+
   const methodLabels = {
     'dinheiro': 'Dinheiro (Espécie)',
     'pix': 'Pix',
@@ -289,21 +312,33 @@ function generateWhatsAppReceipt(order, amount, method) {
     'crediario': 'Crediário'
   };
 
+  const amountStr = typeof amount === 'number' ? amount.toFixed(2) : amount;
+  const paymentMethod = methodLabels[method] || method;
+
   const message = encodeURIComponent(
     `*RECIBO DE PAGAMENTO - RC CELULARES*\n\n` +
     `Olá, *${order.customerName}*!\n` +
     `Seu serviço foi finalizado com sucesso.\n\n` +
     `*Dispositivo:* ${order.device}\n` +
-    `*Defeito:* ${order.defect}\n` +
-    `*Valor:* R$ ${amount.toFixed(2)}\n` +
-    `*Forma de Pagamento:* ${methodLabels[method]}\n` +
+    `*Defeito:* ${order.defect || 'N/A'}\n` +
+    `*Valor:* R$ ${amountStr}\n` +
+    `*Forma de Pagamento:* ${paymentMethod}\n` +
     `*Data:* ${new Date().toLocaleDateString('pt-BR')}\n\n` +
     `Agradecemos a preferência! 📱✨`
   );
 
-  const phone = order.customerPhone.replace(/\D/g, '');
+  // Limpa o telefone: remove tudo que não é número e garante o formato correto
+  let phone = order.customerPhone.replace(/\D/g, '');
+  
+  // Se o número não começar com 55, adiciona (ajuste conforme sua região se necessário)
+  if (phone.length <= 11) {
+    phone = '55' + phone;
+  }
+
+  const whatsappUrl = `https://api.whatsapp.com/send?phone=${phone}&text=${message}`;
+  
   if (confirm('Deseja enviar o recibo via WhatsApp para o cliente?')) {
-    window.open(`https://wa.me/55${phone}?text=${message}`, '_blank');
+    window.open(whatsappUrl, '_blank');
   }
 }
 
@@ -370,17 +405,22 @@ function renderAdminOrders() {
 
 function renderCustomerOrders() {
   console.log("Renderizando ordens para o cliente:", currentUser);
+  
+  // Limpa os dados do usuário atual para comparação
+  const currentName = currentUser.name.toLowerCase().trim();
+  const currentPhone = currentUser.phone ? currentUser.phone.replace(/\D/g, '') : '';
+
   const clientOrders = orders.filter(o => {
     if (!o.customerName || !o.customerPhone) return false;
     
     const orderName = o.customerName.toLowerCase().trim();
-    const currentName = currentUser.name.toLowerCase().trim();
-    
     const orderPhone = o.customerPhone.replace(/\D/g, '');
-    const currentPhone = currentUser.phone ? currentUser.phone.replace(/\D/g, '') : '';
     
-    // Busca por nome exato OU telefone exato para ser mais flexível
-    return orderName === currentName || (currentPhone !== '' && orderPhone === currentPhone);
+    // Verifica se o nome contém o que foi digitado OU se o telefone é igual
+    const nameMatch = orderName.includes(currentName) || currentName.includes(orderName);
+    const phoneMatch = currentPhone !== '' && (orderPhone.includes(currentPhone) || currentPhone.includes(orderPhone));
+    
+    return nameMatch || phoneMatch;
   });
 
   const active = clientOrders.filter(o => o.status !== 'archive');
