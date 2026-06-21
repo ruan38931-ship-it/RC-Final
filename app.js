@@ -249,17 +249,18 @@ async function confirmCompleteOrder() {
     return;
   }
 
-  const order = orders.find(o => o.id === orderToComplete);
+  // Busca flexível do ID para garantir que encontre a ordem para o recibo
+  const order = orders.find(o => String(o.id) === String(orderToComplete));
 
   if (useFirebase) {
-    await db.collection("orders").doc(orderToComplete).update({
+    await db.collection("orders").doc(String(orderToComplete)).update({
       status: 'archive',
       amount: amount,
       paymentMethod: method,
       completedAt: new Date().toISOString()
     });
   } else {
-    const idx = orders.findIndex(o => o.id === orderToComplete);
+    const idx = orders.findIndex(o => String(o.id) === String(orderToComplete));
     if (idx !== -1) {
       orders[idx].status = 'archive';
       orders[idx].amount = amount;
@@ -368,10 +369,19 @@ function renderAdminOrders() {
 }
 
 function renderCustomerOrders() {
-  const clientOrders = orders.filter(o => 
-    o.customerName.toLowerCase() === currentUser.name.toLowerCase() &&
-    o.customerPhone.replace(/\D/g, '') === currentUser.phone.replace(/\D/g, '')
-  );
+  console.log("Renderizando ordens para o cliente:", currentUser);
+  const clientOrders = orders.filter(o => {
+    if (!o.customerName || !o.customerPhone) return false;
+    
+    const orderName = o.customerName.toLowerCase().trim();
+    const currentName = currentUser.name.toLowerCase().trim();
+    
+    const orderPhone = o.customerPhone.replace(/\D/g, '');
+    const currentPhone = currentUser.phone ? currentUser.phone.replace(/\D/g, '') : '';
+    
+    // Busca por nome exato OU telefone exato para ser mais flexível
+    return orderName === currentName || (currentPhone !== '' && orderPhone === currentPhone);
+  });
 
   const active = clientOrders.filter(o => o.status !== 'archive');
   const completed = clientOrders.filter(o => o.status === 'archive');
