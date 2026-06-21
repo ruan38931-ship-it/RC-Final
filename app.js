@@ -384,7 +384,7 @@ function renderOrderCard(order, isAdmin) {
             <option value="esperando-peca" ${order.status === 'esperando-peca' ? 'selected' : ''}>Peças</option>
             <option value="pronto" ${order.status === 'pronto' ? 'selected' : ''}>Pronto</option>
           </select>
-          <button class="btn btn-primary btn-sm" onclick="updateOrderStatus('${order.id}', 'finalizado')">Finalizar</button>
+          <button class="btn btn-primary btn-sm" style="background-color: #ef4444 !important;" onclick="openCompleteModal('${order.id}')">Finalizar</button>
         </div>
       ` : ''}
       ${order.status === 'archive' ? `<div class="mt-2 pt-2 border-t text-sm font-bold text-green-600">Pago: R$ ${order.amount.toFixed(2)} (${order.paymentMethod})</div>` : ''}
