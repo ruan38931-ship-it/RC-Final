@@ -624,7 +624,8 @@ select {
   padding: 1rem;
 }
 
-.modal-overlay.open {
+.modal-overlay.open,
+.modal-overlay.active {
   display: flex;
 }
 
