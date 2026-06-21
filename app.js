@@ -3,12 +3,12 @@
  * Substitua os valores abaixo pelas suas credenciais do Firebase Console
  */
 const firebaseConfig = {
-  apiKey: "AIzaSyBl-i7mqXXHs1OZwWxHORzTmRi0-KEquBA",
-  authDomain: "rc-celulares-3e650.firebaseapp.com",
-  projectId: "rc-celulares-3e650",
-  storageBucket: "rc-celulares-3e650.firebasestorage.app",
-  messagingSenderId: "688153532720",
-  appId: "1:688153532720:web:41d1473a48788227c8d0f5"
+  apiKey: "SUA_API_KEY",
+  authDomain: "SEU_PROJETO.firebaseapp.com",
+  projectId: "SEU_PROJETO_ID",
+  storageBucket: "SEU_PROJETO.appspot.com",
+  messagingSenderId: "SEU_SENDER_ID",
+  appId: "SEU_APP_ID"
 };
 
 // Inicializa o Firebase
@@ -87,7 +87,7 @@ async function handleEmployeeLogin(e) {
   const password = document.getElementById('employeePassword').value;
 
   // Admin padrão do sistema
-  if (code === 'adcione seu codigo e sua senha' && password === 'password') {
+  if (code === 'admin' && password === '1234') {
     loginSuccess({ name: 'Administrador', code: 'admin' }, 'admin');
     return;
   }
@@ -374,7 +374,6 @@ function renderEmployeeList() {
     <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
       <div>
         <div class="font-bold text-sm">Administrador</div>
-        <div class="text-xs text-gray-400">Funcionário Principal</div>
       </div>
       <span class="text-xs font-bold text-blue-600 uppercase">Sistema</span>
     </div>
@@ -384,7 +383,6 @@ function renderEmployeeList() {
     <div class="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
       <div>
         <div class="font-bold text-sm">${emp.name}</div>
-        <div class="text-xs text-gray-400">Funcionário Ativo</div>
       </div>
       <button class="text-red-500 hover:text-red-700 p-1" onclick="deleteEmployee('${emp.id}')" title="Remover Funcionário">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
