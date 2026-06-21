@@ -11,9 +11,22 @@ const firebaseConfig = {
   appId: "SEU_APP_ID"
 };
 
-// Inicializa o Firebase
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
+// Inicializa o Firebase (com verificação de segurança)
+if (firebaseConfig.apiKey !== "SUA_API_KEY") {
+  firebase.initializeApp(firebaseConfig);
+} else {
+  console.warn("Firebase não configurado. O sistema usará dados locais temporários.");
+  // Mock do Firestore para não quebrar o código enquanto o usuário não configura
+  window.db = {
+    collection: () => ({
+      orderBy: () => ({ onSnapshot: () => {} }),
+      onSnapshot: () => {},
+      add: () => Promise.resolve(),
+      doc: () => ({ update: () => Promise.resolve(), delete: () => Promise.resolve() })
+    })
+  };
+}
+const db = window.db || firebase.firestore();
 
 // ============================================
 // ESTADO GLOBAL E SELETORES
@@ -73,12 +86,12 @@ function showPage(pageName) {
     document.getElementById('adminEmployeeName').textContent = currentUser.name;
     updateAdminStats();
     generateQRCode();
-    document.getElementById('btnFaleConosco').classList.add('hidden');
+    if(document.getElementById('btnFaleConosco')) document.getElementById('btnFaleConosco').style.display = 'none';
   } else if (pageName === 'cliente') {
     document.getElementById('customerName').textContent = currentUser.name;
-    document.getElementById('btnFaleConosco').classList.remove('hidden');
+    if(document.getElementById('btnFaleConosco')) document.getElementById('btnFaleConosco').style.display = 'flex';
   } else {
-    document.getElementById('btnFaleConosco').classList.add('hidden');
+    if(document.getElementById('btnFaleConosco')) document.getElementById('btnFaleConosco').style.display = 'none';
   }
 }
 
