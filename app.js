@@ -87,7 +87,7 @@ async function handleEmployeeLogin(e) {
   const password = document.getElementById('employeePassword').value;
 
   // Admin padrão do sistema
-  if (code === 'admin' && password === '1234') {
+  if (code === 'admin' && password === 'Edj54kgc001') {
     loginSuccess({ name: 'Administrador', code: 'admin' }, 'admin');
     return;
   }
