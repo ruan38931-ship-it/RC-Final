@@ -530,6 +530,25 @@ select {
 .badge-status-em-manutencao { background: #eab308; color: white; }
 .badge-status-esperando-peca { background: #f97316; color: white; }
 .badge-status-pronto { background: #22c55e; color: white; }
+.badge-status-archive { background: #10b981; color: white; }
+
+/* Status badge para cards */
+.status-badge {
+  display: inline-block;
+  padding: 0.375rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-em-analise { background: #3b82f6; color: white; }
+.status-em-manutencao { background: #eab308; color: #000; }
+.status-esperando-peca { background: #f97316; color: white; }
+.status-pronto { background: #22c55e; color: white; }
+.status-archive { background: #10b981; color: white; }
+.status-completed { background: #10b981; color: white; }
 
 /* ============================================
    ALERTAS

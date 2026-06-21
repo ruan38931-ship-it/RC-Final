@@ -368,14 +368,20 @@ function renderCustomerOrders() {
 
 function renderOrderCard(order, isAdmin) {
   const statusLabels = { 'em-analise': 'Análise', 'em-manutencao': 'Manutenção', 'esperando-peca': 'Peças', 'pronto': 'Pronto', 'archive': 'Concluído' };
+  const paymentLabels = { 'dinheiro': 'Dinheiro', 'pix': 'Pix', 'cartao_credito': 'Crédito', 'cartao_debito': 'Débito', 'crediario': 'Crediário' };
+  const createdDate = new Date(order.createdAt).toLocaleDateString('pt-BR');
+  
   return `
     <div class="order-card">
       <div class="flex justify-between mb-2">
         <h3 class="font-bold">${order.device}</h3>
         <span class="status-badge status-${order.status}">${statusLabels[order.status]}</span>
       </div>
-      <p class="text-sm mb-2">${order.customerName} • ${order.customerPhone}</p>
-      <p class="text-xs text-gray-500 mb-4">${order.defect}</p>
+      <p class="text-sm mb-1"><strong>Cliente:</strong> ${order.customerName}</p>
+      <p class="text-sm mb-1"><strong>Telefone:</strong> ${order.customerPhone}</p>
+      <p class="text-sm mb-1"><strong>Técnico:</strong> ${order.technician}</p>
+      <p class="text-sm mb-1"><strong>Data:</strong> ${createdDate}</p>
+      <p class="text-xs text-gray-500 mb-4"><strong>Defeito:</strong> ${order.defect}</p>
       ${isAdmin && order.status !== 'archive' ? `
         <div class="flex gap-2">
           <select class="flex-1 text-xs p-1 border rounded" onchange="updateOrderStatus('${order.id}', this.value)">
@@ -387,7 +393,7 @@ function renderOrderCard(order, isAdmin) {
           <button class="btn btn-primary btn-sm" style="background-color: #ef4444 !important;" onclick="openCompleteModal('${order.id}')">Finalizar</button>
         </div>
       ` : ''}
-      ${order.status === 'archive' ? `<div class="mt-2 pt-2 border-t text-sm font-bold text-green-600">Pago: R$ ${order.amount.toFixed(2)} (${order.paymentMethod})</div>` : ''}
+      ${order.status === 'archive' ? `<div class="mt-3 pt-3 border-t text-sm font-bold text-green-600">✓ Serviço Concluído - Pago: R$ ${order.amount.toFixed(2)} (${paymentLabels[order.paymentMethod] || order.paymentMethod})</div>` : ''}
     </div>
   `;
 }
