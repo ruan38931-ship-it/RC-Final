@@ -1,6 +1,7 @@
 /**
- * CONFIGURAÇÃO DO FIREBASE
- * Substitua os valores abaixo pelas suas credenciais do Firebase Console
+ * CONFIGURAÇÃO DO FIREBASE (OPCIONAL)
+ * Para ativar o banco de dados na nuvem, preencha as chaves abaixo.
+ * Se deixar como "SUA_API_KEY", o sistema usará o armazenamento local (localStorage).
  */
 const firebaseConfig = {
   apiKey: "SUA_API_KEY",
@@ -11,22 +12,20 @@ const firebaseConfig = {
   appId: "SEU_APP_ID"
 };
 
-// Inicializa o Firebase (com verificação de segurança)
+// Estado da Conexão
+let useFirebase = false;
+let db = null;
+
 if (firebaseConfig.apiKey !== "SUA_API_KEY") {
-  firebase.initializeApp(firebaseConfig);
-} else {
-  console.warn("Firebase não configurado. O sistema usará dados locais temporários.");
-  // Mock do Firestore para não quebrar o código enquanto o usuário não configura
-  window.db = {
-    collection: () => ({
-      orderBy: () => ({ onSnapshot: () => {} }),
-      onSnapshot: () => {},
-      add: () => Promise.resolve(),
-      doc: () => ({ update: () => Promise.resolve(), delete: () => Promise.resolve() })
-    })
-  };
+  try {
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    useFirebase = true;
+    console.log("Firebase conectado com sucesso!");
+  } catch (e) {
+    console.error("Erro ao conectar Firebase, usando local:", e);
+  }
 }
-const db = window.db || firebase.firestore();
 
 // ============================================
 // ESTADO GLOBAL E SELETORES
@@ -43,22 +42,29 @@ const pages = {
 };
 
 // ============================================
-// INICIALIZAÇÃO E SINCRONIZAÇÃO EM TEMPO REAL
+// INICIALIZAÇÃO
 // ============================================
 function initApp() {
-  // 1. Escutar Ordens em Tempo Real
-  db.collection("orders").orderBy("createdAt", "desc").onSnapshot((snapshot) => {
-    orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  if (useFirebase) {
+    // Sincronização Firebase
+    db.collection("orders").orderBy("createdAt", "desc").onSnapshot((snapshot) => {
+      orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      updateUI();
+    });
+    db.collection("employees").onSnapshot((snapshot) => {
+      employees = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderEmployeeList();
+    });
+  } else {
+    // Sincronização Local
+    const localOrders = localStorage.getItem('rc_orders');
+    const localEmployees = localStorage.getItem('rc_employees');
+    orders = localOrders ? JSON.parse(localOrders) : [];
+    employees = localEmployees ? JSON.parse(localEmployees) : [];
     updateUI();
-  });
-
-  // 2. Escutar Funcionários em Tempo Real
-  db.collection("employees").onSnapshot((snapshot) => {
-    employees = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     renderEmployeeList();
-  });
+  }
 
-  // Verificar sessão no localStorage (apenas para persistir login local)
   const savedUser = localStorage.getItem('rc_user');
   const savedRole = localStorage.getItem('rc_role');
 
@@ -73,25 +79,37 @@ function initApp() {
   setupEventListeners();
 }
 
+function saveData() {
+  if (!useFirebase) {
+    localStorage.setItem('rc_orders', JSON.stringify(orders));
+    localStorage.setItem('rc_employees', JSON.stringify(employees));
+    updateUI();
+  }
+}
+
 // ============================================
 // GERENCIAMENTO DE TELAS
 // ============================================
 function showPage(pageName) {
   Object.keys(pages).forEach(key => {
     pages[key].classList.remove('active');
+    pages[key].style.display = 'none';
   });
+  
   pages[pageName].classList.add('active');
+  pages[pageName].style.display = 'block';
 
-  if (pageName === 'admin') {
-    document.getElementById('adminEmployeeName').textContent = currentUser.name;
-    updateAdminStats();
-    generateQRCode();
-    if(document.getElementById('btnFaleConosco')) document.getElementById('btnFaleConosco').style.display = 'none';
-  } else if (pageName === 'cliente') {
+  const btnFaleConosco = document.getElementById('btnFaleConosco');
+  if (pageName === 'cliente') {
+    if(btnFaleConosco) btnFaleConosco.style.display = 'flex';
     document.getElementById('customerName').textContent = currentUser.name;
-    if(document.getElementById('btnFaleConosco')) document.getElementById('btnFaleConosco').style.display = 'flex';
   } else {
-    if(document.getElementById('btnFaleConosco')) document.getElementById('btnFaleConosco').style.display = 'none';
+    if(btnFaleConosco) btnFaleConosco.style.display = 'none';
+    if (pageName === 'admin') {
+      document.getElementById('adminEmployeeName').textContent = currentUser.name;
+      updateAdminStats();
+      generateQRCode();
+    }
   }
 }
 
@@ -103,13 +121,11 @@ async function handleEmployeeLogin(e) {
   const code = document.getElementById('employeeCode').value;
   const password = document.getElementById('employeePassword').value;
 
-  // Admin padrão do sistema
   if (code === 'admin' && password === '1234') {
     loginSuccess({ name: 'Administrador', code: 'admin' }, 'admin');
     return;
   }
 
-  // Verificar no Firebase
   const emp = employees.find(e => e.code === code && e.password === password);
   if (emp) {
     loginSuccess(emp, 'admin');
@@ -123,7 +139,6 @@ function handleClientLogin(e) {
   const name = document.getElementById('clientName').value;
   const phone = document.getElementById('clientPhone').value;
 
-  // Verifica se existe alguma ordem para este cliente
   const hasOrder = orders.some(o => 
     o.customerName.toLowerCase() === name.toLowerCase() && 
     o.customerPhone.replace(/\D/g, '') === phone.replace(/\D/g, '')
@@ -154,11 +169,12 @@ function logout() {
 }
 
 // ============================================
-// OPERAÇÕES COM ORDENS DE SERVIÇO (FIREBASE)
+// OPERAÇÕES COM ORDENS
 // ============================================
 async function createOrder(e) {
   e.preventDefault();
   const newOrder = {
+    id: useFirebase ? null : Date.now().toString(),
     device: document.getElementById('orderDevice').value,
     customerName: document.getElementById('orderCustomer').value,
     customerPhone: document.getElementById('orderPhone').value,
@@ -167,16 +183,19 @@ async function createOrder(e) {
     status: document.getElementById('orderStatus').value,
     createdAt: new Date().toISOString(),
     completedAt: null,
-    amount: 0
+    amount: 0,
+    paymentMethod: 'dinheiro'
   };
 
-  try {
+  if (useFirebase) {
     await db.collection("orders").add(newOrder);
-    e.target.reset();
-    showToast('Ordem de serviço criada com sucesso!');
-  } catch (error) {
-    showToast('Erro ao criar ordem: ' + error.message, 'error');
+  } else {
+    orders.unshift(newOrder);
+    saveData();
   }
+  
+  e.target.reset();
+  showToast('Ordem de serviço criada!');
 }
 
 async function updateOrderStatus(orderId, newStatus) {
@@ -185,28 +204,32 @@ async function updateOrderStatus(orderId, newStatus) {
     return;
   }
 
-  try {
+  if (useFirebase) {
     await db.collection("orders").doc(orderId).update({ status: newStatus });
-    showToast('Status atualizado!');
-  } catch (error) {
-    showToast('Erro ao atualizar status', 'error');
+  } else {
+    const idx = orders.findIndex(o => o.id === orderId);
+    if (idx !== -1) {
+      orders[idx].status = newStatus;
+      saveData();
+    }
   }
+  showToast('Status atualizado!');
 }
 
 let orderToComplete = null;
 function openCompleteModal(orderId) {
-  const order = orders.find(o => o.id === orderId);
-  if (!order) return;
-
   orderToComplete = orderId;
-  document.getElementById('completeOrderDevice').textContent = order.device;
-  document.getElementById('completeOrderCustomer').textContent = order.customerName;
-  document.getElementById('completeModal').classList.add('active');
+  const order = orders.find(o => o.id === orderId);
+  if (order) {
+    document.getElementById('completeOrderDevice').textContent = order.device;
+    document.getElementById('completeOrderCustomer').textContent = order.customerName;
+    document.getElementById('completeModal').classList.add('active');
+  }
 }
 
 async function confirmCompleteOrder() {
   const amount = parseFloat(document.getElementById('completeAmount').value);
-  const paymentMethod = document.getElementById('completePaymentMethod').value;
+  const method = document.getElementById('completePaymentMethod').value;
   
   if (isNaN(amount) || amount < 0) {
     showToast('Informe um valor válido', 'error');
@@ -215,24 +238,28 @@ async function confirmCompleteOrder() {
 
   const order = orders.find(o => o.id === orderToComplete);
 
-  try {
+  if (useFirebase) {
     await db.collection("orders").doc(orderToComplete).update({
       status: 'archive',
       amount: amount,
-      paymentMethod: paymentMethod,
+      paymentMethod: method,
       completedAt: new Date().toISOString()
     });
-    
-    document.getElementById('completeModal').classList.remove('active');
-    document.getElementById('completeAmount').value = '';
-    showToast('Serviço finalizado e arquivado!');
-
-    // Gerar Recibo WhatsApp
-    generateWhatsAppReceipt(order, amount, paymentMethod);
-
-  } catch (error) {
-    showToast('Erro ao finalizar serviço', 'error');
+  } else {
+    const idx = orders.findIndex(o => o.id === orderToComplete);
+    if (idx !== -1) {
+      orders[idx].status = 'archive';
+      orders[idx].amount = amount;
+      orders[idx].paymentMethod = method;
+      orders[idx].completedAt = new Date().toISOString();
+      saveData();
+    }
   }
+
+  document.getElementById('completeModal').classList.remove('active');
+  document.getElementById('completeAmount').value = '';
+  showToast('Serviço finalizado!');
+  generateWhatsAppReceipt(order, amount, method);
 }
 
 function generateWhatsAppReceipt(order, amount, method) {
@@ -257,15 +284,13 @@ function generateWhatsAppReceipt(order, amount, method) {
   );
 
   const phone = order.customerPhone.replace(/\D/g, '');
-  const url = `https://wa.me/55${phone}?text=${message}`;
-  
   if (confirm('Deseja enviar o recibo via WhatsApp para o cliente?')) {
-    window.open(url, '_blank');
+    window.open(`https://wa.me/55${phone}?text=${message}`, '_blank');
   }
 }
 
 // ============================================
-// GERENCIAMENTO DE FUNCIONÁRIOS (FIREBASE)
+// FUNCIONÁRIOS
 // ============================================
 async function addEmployee(e) {
   e.preventDefault();
@@ -273,33 +298,33 @@ async function addEmployee(e) {
   const code = document.getElementById('empCode').value;
   const password = document.getElementById('empPassword').value;
 
-  if (!name || !code || !password) {
-    showToast('Preencha todos os campos', 'error');
-    return;
-  }
+  const newEmp = { id: Date.now().toString(), name, code, password };
 
-  try {
-    await db.collection("employees").add({ name, code, password });
-    e.target.reset();
-    showToast('Funcionário adicionado!');
-  } catch (error) {
-    showToast('Erro ao adicionar funcionário', 'error');
+  if (useFirebase) {
+    delete newEmp.id;
+    await db.collection("employees").add(newEmp);
+  } else {
+    employees.push(newEmp);
+    saveData();
+    renderEmployeeList();
   }
+  e.target.reset();
+  showToast('Funcionário adicionado!');
 }
 
 async function deleteEmployee(empId) {
-  if (!confirm('Deseja realmente remover este funcionário?')) return;
-  
-  try {
+  if (!confirm('Remover funcionário?')) return;
+  if (useFirebase) {
     await db.collection("employees").doc(empId).delete();
-    showToast('Funcionário removido');
-  } catch (error) {
-    showToast('Erro ao remover funcionário', 'error');
+  } else {
+    employees = employees.filter(e => e.id !== empId);
+    saveData();
+    renderEmployeeList();
   }
 }
 
 // ============================================
-// RENDERIZAÇÃO DA UI
+// UI RENDER
 // ============================================
 function updateUI() {
   if (currentRole === 'admin') {
@@ -313,32 +338,19 @@ function updateUI() {
 
 function renderAdminOrders() {
   const tabs = ['active', 'em-analise', 'em-manutencao', 'esperando-peca', 'completed', 'archive'];
-  
   tabs.forEach(tab => {
     const container = document.getElementById(`admin-tab-${tab}`);
-    let filtered = [];
+    if(!container) return;
+    
+    let filtered = (tab === 'active') ? orders.filter(o => o.status !== 'archive') : orders.filter(o => o.status === tab);
+    const countEl = document.getElementById(`count-${tab}`);
+    if(countEl) countEl.textContent = filtered.length;
 
-    if (tab === 'active') {
-      filtered = orders.filter(o => o.status !== 'archive');
-    } else {
-      filtered = orders.filter(o => o.status === tab);
-    }
-
-    document.getElementById(`count-${tab}`).textContent = filtered.length;
-
-    if (filtered.length === 0) {
-      container.innerHTML = `<div class="empty-state"><p>Nenhuma ordem nesta categoria</p></div>`;
-      return;
-    }
-
-    container.innerHTML = filtered.map(o => renderOrderCard(o, true)).join('');
+    container.innerHTML = filtered.length ? filtered.map(o => renderOrderCard(o, true)).join('') : '<div class="empty-state"><p>Nenhuma ordem aqui</p></div>';
   });
 }
 
 function renderCustomerOrders() {
-  const activeContainer = document.getElementById('customer-tab-active');
-  const completedContainer = document.getElementById('customer-tab-completed');
-
   const clientOrders = orders.filter(o => 
     o.customerName.toLowerCase() === currentUser.name.toLowerCase() &&
     o.customerPhone.replace(/\D/g, '') === currentUser.phone.replace(/\D/g, '')
@@ -349,328 +361,136 @@ function renderCustomerOrders() {
 
   document.getElementById('customerActiveCount').textContent = active.length;
   document.getElementById('customerCompletedCount').textContent = completed.length;
-
-  document.getElementById('customerTabs').classList.remove('hidden');
-  document.getElementById('customerNoOrders').classList.add('hidden');
-
-  activeContainer.innerHTML = active.length ? active.map(o => renderOrderCard(o, false)).join('') : '<div class="empty-state"><p>Nenhuma ordem em andamento</p></div>';
-  completedContainer.innerHTML = completed.length ? completed.map(o => renderOrderCard(o, false)).join('') : '<div class="empty-state"><p>Nenhuma ordem finalizada</p></div>';
+  
+  document.getElementById('customer-tab-active').innerHTML = active.length ? active.map(o => renderOrderCard(o, false)).join('') : '<p class="text-center py-4">Nenhuma ordem ativa</p>';
+  document.getElementById('customer-tab-completed').innerHTML = completed.length ? completed.map(o => renderOrderCard(o, false)).join('') : '<p class="text-center py-4">Nenhuma ordem concluída</p>';
 }
 
 function renderOrderCard(order, isAdmin) {
-  const date = new Date(order.createdAt).toLocaleDateString('pt-BR');
-  const statusLabels = {
-    'em-analise': 'Em Análise',
-    'em-manutencao': 'Em Manutenção',
-    'esperando-peca': 'Esperando Peça',
-    'pronto': 'Pronto',
-    'archive': 'Concluído'
-  };
-
+  const statusLabels = { 'em-analise': 'Análise', 'em-manutencao': 'Manutenção', 'esperando-peca': 'Peças', 'pronto': 'Pronto', 'archive': 'Concluído' };
   return `
     <div class="order-card">
-      <div class="flex justify-between items-start mb-4">
-        <div>
-          <h3 class="font-bold text-lg">${order.device}</h3>
-          <p class="text-sm" style="color: var(--muted-foreground)">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;vertical-align:middle;margin-right:4px"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            ${order.customerName} • ${order.customerPhone}
-          </p>
-        </div>
+      <div class="flex justify-between mb-2">
+        <h3 class="font-bold">${order.device}</h3>
         <span class="status-badge status-${order.status}">${statusLabels[order.status]}</span>
       </div>
-      
-      <div class="mb-4">
-        <div class="text-xs font-semibold uppercase mb-1" style="color: var(--muted-foreground)">Defeito:</div>
-        <p class="text-sm">${order.defect}</p>
-      </div>
-
-      <div class="flex flex-wrap gap-4 items-center justify-between pt-4" style="border-top: 1px solid var(--border)">
-        <div class="flex items-center gap-2 text-sm font-medium" style="color: #2563eb">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>
-          Técnico: ${order.technician}
-        </div>
-        <div class="text-xs" style="color: var(--muted-foreground)">
-          Criado em: ${date}
-          ${order.completedAt ? `<br>Concluído: ${new Date(order.completedAt).toLocaleDateString('pt-BR')}` : ''}
-        </div>
-      </div>
-
+      <p class="text-sm mb-2">${order.customerName} • ${order.customerPhone}</p>
+      <p class="text-xs text-gray-500 mb-4">${order.defect}</p>
       ${isAdmin && order.status !== 'archive' ? `
-        <div class="flex gap-2 mt-4">
-          <select class="flex-1 text-sm p-2 border rounded" onchange="updateOrderStatus('${order.id}', this.value)">
-            <option value="em-analise" ${order.status === 'em-analise' ? 'selected' : ''}>Em Análise</option>
-            <option value="em-manutencao" ${order.status === 'em-manutencao' ? 'selected' : ''}>Em Manutenção</option>
-            <option value="esperando-peca" ${order.status === 'esperando-peca' ? 'selected' : ''}>Esperando Peça</option>
+        <div class="flex gap-2">
+          <select class="flex-1 text-xs p-1 border rounded" onchange="updateOrderStatus('${order.id}', this.value)">
+            <option value="em-analise" ${order.status === 'em-analise' ? 'selected' : ''}>Análise</option>
+            <option value="em-manutencao" ${order.status === 'em-manutencao' ? 'selected' : ''}>Manutenção</option>
+            <option value="esperando-peca" ${order.status === 'esperando-peca' ? 'selected' : ''}>Peças</option>
             <option value="pronto" ${order.status === 'pronto' ? 'selected' : ''}>Pronto</option>
           </select>
-          <button class="btn btn-primary btn-sm" onclick="updateOrderStatus('${order.id}', 'finalizado')">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px"><polyline points="20 6 9 17 4 12"/></svg>
-            Finalizar
-          </button>
+          <button class="btn btn-primary btn-sm" onclick="updateOrderStatus('${order.id}', 'finalizado')">Finalizar</button>
         </div>
       ` : ''}
-
-      ${order.status === 'archive' ? `
-        <div class="mt-4 pt-4 flex justify-between items-center" style="border-top: 1px dashed var(--border)">
-          <div>
-            <span class="text-sm font-bold text-green-600">Valor: R$ ${order.amount.toFixed(2)}</span>
-            <span class="payment-badge payment-${order.paymentMethod}">${order.paymentMethod ? order.paymentMethod.replace('_', ' ') : 'dinheiro'}</span>
-          </div>
-          <span class="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full font-bold">PAGO</span>
-        </div>
-      ` : ''}
+      ${order.status === 'archive' ? `<div class="mt-2 pt-2 border-t text-sm font-bold text-green-600">Pago: R$ ${order.amount.toFixed(2)} (${order.paymentMethod})</div>` : ''}
     </div>
   `;
 }
 
 function renderEmployeeList() {
   const container = document.getElementById('employeeList');
-  document.getElementById('employeeCount').textContent = employees.length + 1; // +1 do admin padrão
-
-  let html = `
-    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
-      <div>
-        <div class="font-bold text-sm">Administrador</div>
-      </div>
-      <span class="text-xs font-bold text-blue-600 uppercase">Sistema</span>
-    </div>
-  `;
-
-  html += employees.map(emp => `
-    <div class="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
-      <div>
-        <div class="font-bold text-sm">${emp.name}</div>
-      </div>
-      <button class="text-red-500 hover:text-red-700 p-1" onclick="deleteEmployee('${emp.id}')" title="Remover Funcionário">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-      </button>
-    </div>
-  `).join('');
-
-  container.innerHTML = html || '<p class="text-xs text-center text-gray-400 py-4">Nenhum funcionário adicional cadastrado</p>';
+  if(!container) return;
+  document.getElementById('employeeCount').textContent = employees.length + 1;
+  let html = `<div class="p-2 bg-gray-100 rounded mb-2 font-bold text-sm">Administrador (Sistema)</div>`;
+  html += employees.map(e => `<div class="flex justify-between p-2 border rounded mb-2 text-sm"><span>${e.name}</span><button onclick="deleteEmployee('${e.id}')" class="text-red-500">X</button></div>`).join('');
+  container.innerHTML = html;
 }
 
 function renderCustomerHistory() {
   const container = document.getElementById('customerHistoryList');
-  const customersMap = new Map();
-
+  if(!container) return;
+  const customers = {};
   orders.forEach(o => {
-    const key = `${o.customerName}|${o.customerPhone}`;
-    if (!customersMap.has(key)) {
-      customersMap.set(key, { 
-        name: o.customerName, 
-        phone: o.customerPhone, 
-        count: 0, 
-        lastVisit: o.createdAt 
-      });
-    }
-    const data = customersMap.get(key);
-    data.count++;
-    if (new Date(o.createdAt) > new Date(data.lastVisit)) {
-      data.lastVisit = o.createdAt;
-    }
+    const key = o.customerPhone;
+    if(!customers[key]) customers[key] = { name: o.customerName, count: 0 };
+    customers[key].count++;
   });
-
-  const customers = Array.from(customersMap.values());
-  document.getElementById('customerHistoryCount').textContent = `${customers.length} cliente(s) registrado(s)`;
-
-  container.innerHTML = customers.map(c => `
-    <div class="p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
-      <div class="font-bold text-sm">${c.name}</div>
-      <div class="text-xs text-gray-500">${c.phone}</div>
-      <div class="flex justify-between mt-2 pt-2 border-top" style="border-top: 1px solid #f3f4f6">
-        <span class="text-xs">Última visita: ${new Date(c.lastVisit).toLocaleDateString('pt-BR')}</span>
-        <span class="text-xs font-bold text-red-600">${c.count} ordem(ns)</span>
-      </div>
-    </div>
-  `).join('') || '<p class="text-xs text-center text-gray-400 py-4">Nenhum cliente registrado ainda</p>';
+  container.innerHTML = Object.values(customers).map(c => `<div class="p-2 border rounded mb-2 text-sm"><b>${c.name}</b> - ${c.count} ordens</div>`).join('');
 }
 
 function updateAdminStats() {
-  const completedOrders = orders.filter(o => o.status === 'archive');
-  const totalRevenue = completedOrders.reduce((acc, o) => acc + o.amount, 0);
-  const ticketMedio = completedOrders.length ? totalRevenue / completedOrders.length : 0;
-  
-  const thisMonth = new Date().getMonth();
-  const thisYear = new Date().getFullYear();
-  const revenueThisMonth = completedOrders
-    .filter(o => {
-      const d = new Date(o.completedAt);
-      return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
-    })
-    .reduce((acc, o) => acc + o.amount, 0);
+  const completed = orders.filter(o => o.status === 'archive');
+  const revenue = completed.reduce((acc, o) => acc + o.amount, 0);
+  const payments = { dinheiro: 0, pix: 0, cartao_credito: 0, cartao_debito: 0, crediario: 0 };
+  completed.forEach(o => payments[o.paymentMethod || 'dinheiro'] += o.amount);
 
-  // Totais por forma de pagamento (Livro Caixa)
-  const payments = {
-    dinheiro: 0,
-    pix: 0,
-    cartao_credito: 0,
-    cartao_debito: 0,
-    crediario: 0
-  };
-  completedOrders.forEach(o => {
-    const method = o.paymentMethod || 'dinheiro';
-    payments[method] += o.amount;
-  });
-
-  // Renderizar estatísticas na aba Arquivo
   const archiveContainer = document.getElementById('admin-tab-archive');
   if (archiveContainer) {
-    const devicesMap = {};
-    completedOrders.forEach(o => {
-      devicesMap[o.device] = (devicesMap[o.device] || 0) + 1;
-    });
-    const topDevices = Object.entries(devicesMap)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5);
-
     archiveContainer.innerHTML = `
-      <div class="stats-grid mb-6">
-        <div class="stat-card">
-          <div class="text-xs text-muted-foreground mb-1">Total de Serviços</div>
-          <div class="text-2xl font-bold text-green-600">${completedOrders.length}</div>
-          <div class="text-xs text-muted-foreground mt-1">Serviços concluídos</div>
-        </div>
-        <div class="stat-card">
-          <div class="text-xs text-muted-foreground mb-1">Receita Total</div>
-          <div class="text-2xl font-bold text-blue-600">R$ ${totalRevenue.toFixed(2)}</div>
-          <div class="text-xs text-muted-foreground mt-1">Faturamento total</div>
-        </div>
-        <div class="stat-card">
-          <div class="text-xs text-muted-foreground mb-1">Ticket Médio</div>
-          <div class="text-2xl font-bold text-purple-600">R$ ${ticketMedio.toFixed(2)}</div>
-          <div class="text-xs text-muted-foreground mt-1">Valor médio por serviço</div>
-        </div>
-        <div class="stat-card">
-          <div class="text-xs text-muted-foreground mb-1">Este Mês</div>
-          <div class="text-2xl font-bold text-orange-600">R$ ${revenueThisMonth.toFixed(2)}</div>
-          <div class="text-xs text-muted-foreground mt-1">Faturamento mensal</div>
+      <div class="stats-grid mb-4">
+        <div class="stat-card"><h3>Total</h3><p>R$ ${revenue.toFixed(2)}</p></div>
+        <div class="stat-card"><h3>Serviços</h3><p>${completed.length}</p></div>
+      </div>
+      <div class="card p-4 mb-4">
+        <h4 class="font-bold mb-2">💵 Livro Caixa</h4>
+        <div class="grid grid-2 gap-2 text-sm">
+          <div>Dinheiro: R$ ${payments.dinheiro.toFixed(2)}</div>
+          <div>Pix: R$ ${payments.pix.toFixed(2)}</div>
+          <div>Crédito: R$ ${payments.cartao_credito.toFixed(2)}</div>
+          <div>Débito: R$ ${payments.cartao_debito.toFixed(2)}</div>
+          <div>Crediário: R$ ${payments.crediario.toFixed(2)}</div>
         </div>
       </div>
-
-      <!-- Livro Caixa -->
-      <div class="card mb-6" style="border-left: 4px solid var(--brand-red)">
-        <div class="card-header"><div class="card-title">💵 Livro Caixa (Resumo por Pagamento)</div></div>
-        <div class="card-content">
-          <div class="grid grid-2 gap-4">
-            <div class="p-3 bg-green-50 rounded border border-green-100">
-              <div class="text-xs font-bold text-green-700 uppercase">Dinheiro (Espécie)</div>
-              <div class="text-lg font-bold">R$ ${payments.dinheiro.toFixed(2)}</div>
-            </div>
-            <div class="p-3 bg-cyan-50 rounded border border-cyan-100">
-              <div class="text-xs font-bold text-cyan-700 uppercase">Pix</div>
-              <div class="text-lg font-bold">R$ ${payments.pix.toFixed(2)}</div>
-            </div>
-            <div class="p-3 bg-red-50 rounded border border-red-100">
-              <div class="text-xs font-bold text-red-700 uppercase">Cartão de Crédito</div>
-              <div class="text-lg font-bold">R$ ${payments.cartao_credito.toFixed(2)}</div>
-            </div>
-            <div class="p-3 bg-orange-50 rounded border border-orange-100">
-              <div class="text-xs font-bold text-orange-700 uppercase">Cartão de Débito</div>
-              <div class="text-lg font-bold">R$ ${payments.cartao_debito.toFixed(2)}</div>
-            </div>
-            <div class="p-3 bg-purple-50 rounded border border-purple-100">
-              <div class="text-xs font-bold text-purple-700 uppercase">Crediário</div>
-              <div class="text-lg font-bold">R$ ${payments.crediario.toFixed(2)}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="card mb-6">
-        <div class="card-header"><div class="card-title">📱 Dispositivos Mais Atendidos</div></div>
-        <div class="card-content">
-          ${topDevices.map(([name, count], i) => `
-            <div class="flex items-center justify-between p-2 mb-2 bg-gray-50 rounded">
-              <div class="flex items-center gap-3">
-                <span class="w-6 h-6 flex items-center justify-center bg-yellow-100 text-yellow-700 rounded-full text-xs font-bold">${i+1}</span>
-                <span class="text-sm font-medium">${name}</span>
-              </div>
-              <span class="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full font-bold">${count} serviço(s)</span>
-            </div>
-          `).join('') || '<p class="text-sm text-center text-gray-400">Sem dados suficientes</p>'}
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-header"><div class="card-title">📜 Histórico Completo (${completedOrders.length})</div></div>
-        <div class="card-content space-y-4">
-          ${completedOrders.map(o => renderOrderCard(o, true)).join('')}
-        </div>
-      </div>
+      <div class="space-y-2">${completed.map(o => renderOrderCard(o, true)).join('')}</div>
     `;
   }
 }
 
-// ============================================
-// UTILITÁRIOS
-// ============================================
-function showToast(message, type = 'success') {
-  const toast = document.createElement('div');
-  toast.className = `toast toast-${type}`;
-  toast.textContent = message;
-  document.getElementById('toastContainer').appendChild(toast);
-  setTimeout(() => toast.remove(), 3000);
+function showToast(msg, type='success') {
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.textContent = msg;
+  document.getElementById('toastContainer').appendChild(t);
+  setTimeout(() => t.remove(), 3000);
 }
 
 function generateQRCode() {
   const canvas = document.getElementById('qrCanvas');
-  const link = window.location.href;
-  document.getElementById('qrLink').textContent = link;
-  canvas.innerHTML = '';
-  new QRCode(canvas, {
-    text: link,
-    width: 160,
-    height: 160,
-    colorDark: "#ef4444",
-    colorLight: "#ffffff",
-    correctLevel: QRCode.CorrectLevel.H
-  });
+  if(canvas) {
+    canvas.innerHTML = '';
+    new QRCode(canvas, { text: window.location.href, width: 128, height: 128 });
+  }
 }
 
-// ============================================
-// EVENT LISTENERS
-// ============================================
 function setupEventListeners() {
-  // Tabs
-  document.querySelectorAll('.tab-trigger').forEach(trigger => {
-    trigger.addEventListener('click', () => {
-      const parent = trigger.closest('#loginTabs, #adminTabs, #customerTabs');
-      parent.querySelectorAll('.tab-trigger').forEach(t => t.classList.remove('active'));
-      parent.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.tab-trigger').forEach(t => {
+    t.addEventListener('click', () => {
+      const parent = t.closest('.tabs-list').nextElementSibling;
+      t.parentElement.querySelectorAll('.tab-trigger').forEach(i => i.classList.remove('active'));
+      t.classList.add('active');
+      const tabId = t.dataset.tab;
       
-      trigger.classList.add('active');
-      const tabId = trigger.dataset.tab;
+      // Lógica específica para abas de admin e cliente
+      const containerId = t.closest('#adminTabs') ? `admin-tab-${tabId}` : 
+                         t.closest('#customerTabs') ? `customer-tab-${tabId}` : `tab-${tabId}`;
       
-      if (parent.id === 'loginTabs') {
-        document.getElementById(`tab-${tabId}`).classList.add('active');
-      } else if (parent.id === 'adminTabs') {
-        document.getElementById(`admin-tab-${tabId}`).classList.add('active');
-      } else {
-        document.getElementById(`customer-tab-${tabId}`).classList.add('active');
+      const allTabs = t.closest('.tabs-list').parentElement.querySelectorAll('.tab-content');
+      allTabs.forEach(c => {
+        c.classList.remove('active');
+        c.style.display = 'none';
+      });
+      
+      const activeTab = document.getElementById(containerId);
+      if(activeTab) {
+        activeTab.classList.add('active');
+        activeTab.style.display = 'block';
       }
     });
   });
 
-  // Forms
-  document.getElementById('formEmployee').addEventListener('submit', handleEmployeeLogin);
-  document.getElementById('formClient').addEventListener('submit', handleClientLogin);
-  document.getElementById('formNewOrder').addEventListener('submit', createOrder);
-  document.getElementById('formEmployee_admin').addEventListener('submit', addEmployee);
-  
-  // Buttons
-  document.getElementById('btnAdminLogout').addEventListener('click', logout);
-  document.getElementById('btnCustomerLogout').addEventListener('click', logout);
-  document.getElementById('btnCancelComplete').addEventListener('click', () => {
-    document.getElementById('completeModal').classList.remove('active');
-  });
-  document.getElementById('btnConfirmComplete').addEventListener('click', confirmCompleteOrder);
-  document.getElementById('btnCopyLink').addEventListener('click', () => {
-    navigator.clipboard.writeText(window.location.href);
-    showToast('Link copiado!');
-  });
+  document.getElementById('formEmployee').onsubmit = handleEmployeeLogin;
+  document.getElementById('formClient').onsubmit = handleClientLogin;
+  document.getElementById('formNewOrder').onsubmit = createOrder;
+  document.getElementById('formEmployee_admin').onsubmit = addEmployee;
+  document.getElementById('btnAdminLogout').onclick = logout;
+  document.getElementById('btnCustomerLogout').onclick = logout;
+  document.getElementById('btnCancelComplete').onclick = () => document.getElementById('completeModal').classList.remove('active');
+  document.getElementById('btnConfirmComplete').onclick = confirmCompleteOrder;
 }
 
-// Iniciar
 initApp();
