@@ -572,12 +572,12 @@ function setupEventListeners() {
     navigator.clipboard.writeText(window.location.href);
     showToast('Link copiado!');
   });
-  // ============================================
+// ============================================
 // RC Celulares - App.js
 // ============================================
 
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('Sistema RC Celulares carregado');
+  console.log('✅ Sistema RC Celulares carregado');
 
   // ==================== MODAL DE FINALIZAÇÃO ====================
   const completeModal = document.getElementById('completeModal');
@@ -589,16 +589,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let orderToComplete = null;
 
-  // Função para abrir o modal de finalização
+  // Abrir modal de finalização
   window.openCompleteModal = function(order) {
     orderToComplete = order;
     
     completeOrderDevice.textContent = order.device || 'Dispositivo não informado';
     completeOrderCustomer.textContent = order.customer || 'Cliente não informado';
     
-    completeAmount.value = '';
+    completeAmount.value = order.value || '';
     completeModal.style.display = 'flex';
     completeAmount.focus();
+    completeAmount.select();
   };
 
   // Fechar modal
@@ -612,35 +613,48 @@ document.addEventListener('DOMContentLoaded', () => {
   // Confirmar finalização
   btnConfirmComplete.addEventListener('click', () => {
     const amount = parseFloat(completeAmount.value);
+    const paymentMethod = document.querySelector('input[name="paymentMethod"]:checked')?.value;
 
     if (!amount || amount <= 0) {
-      alert('Por favor, informe um valor válido para o serviço.');
+      alert('⚠️ Por favor, informe um valor válido.');
       completeAmount.focus();
       return;
     }
 
+    if (!paymentMethod) {
+      alert('⚠️ Selecione uma forma de pagamento.');
+      return;
+    }
+
+    const paymentNames = {
+      pix: 'PIX',
+      credito: 'Cartão de Crédito',
+      debito: 'Cartão de Débito',
+      especie: 'Em Espécie',
+      crediario: 'Crediário'
+    };
+
     if (orderToComplete) {
-      console.log(`Ordem finalizada: ${orderToComplete.id} - Valor: R$ ${amount.toFixed(2)}`);
+      console.log(`Ordem finalizada: ${orderToComplete.id} | Valor: R$ ${amount.toFixed(2)} | Pagamento: ${paymentNames[paymentMethod]}`);
       
-      // Aqui você pode chamar sua função de atualizar no Firebase
-      // updateOrderStatus(orderToComplete.id, 'completed', amount);
-      
-      alert(`Ordem finalizada com sucesso!\nValor cobrado: R$ ${amount.toFixed(2)}`);
+      // Aqui futuramente você vai salvar no Firebase
+      // saveCompletedOrder(orderToComplete.id, amount, paymentMethod);
+
+      alert(`✅ Ordem finalizada com sucesso!\n\n` +
+            `Valor: R$ ${amount.toFixed(2)}\n` +
+            `Forma de Pagamento: ${paymentNames[paymentMethod]}`);
+
       closeCompleteModal();
-      
-      // Recarregar lista de ordens (você pode chamar uma função refresh aqui)
-      // loadOrders();
+      // loadOrders(); // Recarregar lista
     }
   });
 
-  // Fechar modal ao clicar fora
+  // Fechar clicando fora
   completeModal.addEventListener('click', (e) => {
-    if (e.target === completeModal) {
-      closeCompleteModal();
-    }
+    if (e.target === completeModal) closeCompleteModal();
   });
 
-  // Permitir fechar com ESC
+  // Fechar com ESC
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && completeModal.style.display === 'flex') {
       closeCompleteModal();
@@ -648,6 +662,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
 });
+   
 }
 
 // Iniciar
