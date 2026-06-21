@@ -717,7 +717,11 @@ document.addEventListener('DOMContentLoaded', () => {
   completeModal.addEventListener('click', e => { if (e.target === completeModal) closeCompleteModal(); });
   receiptModal.addEventListener('click', e => { if (e.target === receiptModal) receiptModal.style.display = 'none'; });
 });
-   
+ /* RECIBO */
+#receiptContent {
+  font-family: monospace;
+  line-height: 1.5;
+}  
 }
 
 // Iniciar
