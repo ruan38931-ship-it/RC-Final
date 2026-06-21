@@ -218,12 +218,25 @@ async function updateOrderStatus(orderId, newStatus) {
 
 let orderToComplete = null;
 function openCompleteModal(orderId) {
+  console.log("Abrindo modal para ordem:", orderId);
   orderToComplete = orderId;
-  const order = orders.find(o => o.id === orderId);
+  // Busca flexível (string ou number) para garantir que encontre a ordem
+  const order = orders.find(o => String(o.id) === String(orderId));
+  
   if (order) {
-    document.getElementById('completeOrderDevice').textContent = order.device;
-    document.getElementById('completeOrderCustomer').textContent = order.customerName;
-    document.getElementById('completeModal').classList.add('active');
+    const deviceEl = document.getElementById('completeOrderDevice');
+    const customerEl = document.getElementById('completeOrderCustomer');
+    const modalEl = document.getElementById('completeModal');
+    
+    if (deviceEl) deviceEl.textContent = order.device;
+    if (customerEl) customerEl.textContent = order.customerName;
+    if (modalEl) {
+      modalEl.classList.add('active');
+      modalEl.style.display = 'flex'; // Força a exibição via style também
+    }
+  } else {
+    console.error("Ordem não encontrada:", orderId);
+    showToast("Erro ao localizar ordem", "error");
   }
 }
 
@@ -256,7 +269,11 @@ async function confirmCompleteOrder() {
     }
   }
 
-  document.getElementById('completeModal').classList.remove('active');
+  const modal = document.getElementById('completeModal');
+  if (modal) {
+    modal.classList.remove('active');
+    modal.style.display = 'none';
+  }
   document.getElementById('completeAmount').value = '';
   showToast('Serviço finalizado!');
   generateWhatsAppReceipt(order, amount, method);
@@ -521,7 +538,13 @@ function setupEventListeners() {
   document.getElementById('formEmployee_admin').onsubmit = addEmployee;
   document.getElementById('btnAdminLogout').onclick = logout;
   document.getElementById('btnCustomerLogout').onclick = logout;
-  document.getElementById('btnCancelComplete').onclick = () => document.getElementById('completeModal').classList.remove('active');
+  document.getElementById('btnCancelComplete').onclick = () => {
+    const modal = document.getElementById('completeModal');
+    if (modal) {
+      modal.classList.remove('active');
+      modal.style.display = 'none';
+    }
+  };
   document.getElementById('btnConfirmComplete').onclick = confirmCompleteOrder;
 }
 
