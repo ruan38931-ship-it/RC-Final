@@ -25,6 +25,26 @@
   Fale Conosco
 </a>
 </head>
+  <!-- ============================================
+     MODAL DE RECIBO DIGITAL
+     ============================================ -->
+<div id="receiptModal" class="modal-overlay">
+  <div class="modal" style="max-width: 480px;">
+    <div class="modal-title" style="text-align:center;">✅ Recibo de Serviço</div>
+    
+    <div id="receiptContent" style="background: white; border: 2px dashed #e2e8f0; border-radius: var(--radius); padding: 1.5rem; margin: 1rem 0;">
+      <!-- Conteúdo do recibo gerado via JS -->
+    </div>
+
+    <div class="modal-footer">
+      <button id="btnCloseReceipt" class="btn btn-outline">Fechar</button>
+      <button id="btnPrintReceipt" class="btn btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M18 21v-4H6v4"/></svg>
+        Imprimir Recibo
+      </button>
+    </div>
+  </div>
+</div>
 <body>
 
 <!-- ============================================
