@@ -18,12 +18,18 @@ let db = null;
 
 if (firebaseConfig.apiKey !== "SUA_API_KEY") {
   try {
-    firebase.initializeApp(firebaseConfig);
-    db = firebase.firestore();
-    useFirebase = true;
-    console.log("Firebase conectado com sucesso!");
+    if (typeof firebase !== 'undefined') {
+      firebase.initializeApp(firebaseConfig);
+      db = firebase.firestore();
+      useFirebase = true;
+      console.log("Firebase conectado com sucesso!");
+    } else {
+      console.warn("Firebase nao carregado. Usando localStorage.");
+      useFirebase = false;
+    }
   } catch (e) {
     console.error("Erro ao conectar Firebase, usando local:", e);
+    useFirebase = false;
   }
 }
 
@@ -46,14 +52,24 @@ const pages = {
 // ============================================
 function initApp() {
   if (useFirebase) {
-    // Sincronização Firebase
+    // Sincronização Firebase com tratamento de erros
     db.collection("orders").orderBy("createdAt", "desc").onSnapshot((snapshot) => {
       orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       updateUI();
+    }, (error) => {
+      console.error("Erro na consulta de ordens:", error);
+      if (error.code === 'failed-precondition') {
+        showToast("Erro: O banco de dados precisa de um índice. Verifique o console.", "error");
+      } else {
+        showToast("Erro ao carregar ordens do banco de dados", "error");
+      }
     });
+
     db.collection("employees").onSnapshot((snapshot) => {
       employees = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       renderEmployeeList();
+    }, (error) => {
+      console.error("Erro na consulta de funcionários:", error);
     });
   } else {
     // Sincronização Local
@@ -186,6 +202,11 @@ async function createOrder(e) {
     amount: 0,
     paymentMethod: 'dinheiro'
   };
+  
+  // Se estiver usando Firebase, garante que o createdAt seja um formato comparável
+  if (useFirebase) {
+    newOrder.createdAt = firebase.firestore.Timestamp.now().toDate().toISOString();
+  }
 
   if (useFirebase) {
     await db.collection("orders").add(newOrder);
