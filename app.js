@@ -54,7 +54,10 @@ function initApp() {
   if (useFirebase) {
     // Sincronização Firebase com tratamento de erros
     db.collection("orders").orderBy("createdAt", "desc").onSnapshot((snapshot) => {
-      orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      orders = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return { ...data, id: doc.id }; // Garante que o ID do documento Firestore seja o ID principal
+      });
       updateUI();
     }, (error) => {
       console.error("Erro na consulta de ordens:", error);
@@ -152,18 +155,26 @@ async function handleEmployeeLogin(e) {
 
 function handleClientLogin(e) {
   e.preventDefault();
-  const name = document.getElementById('clientName').value;
-  const phone = document.getElementById('clientPhone').value;
+  const nameInput = document.getElementById('clientName').value.trim().toLowerCase();
+  const phoneInput = document.getElementById('clientPhone').value.replace(/\D/g, '');
 
-  const hasOrder = orders.some(o => 
-    o.customerName.toLowerCase() === name.toLowerCase() && 
-    o.customerPhone.replace(/\D/g, '') === phone.replace(/\D/g, '')
-  );
+  if (!nameInput || !phoneInput) {
+    showToast('Preencha todos os campos', 'error');
+    return;
+  }
 
-  if (hasOrder) {
-    loginSuccess({ name, phone }, 'cliente');
+  // Busca flexível: encontra qualquer ordem onde o nome ou telefone batam
+  const foundOrder = orders.find(o => {
+    const orderName = o.customerName.toLowerCase();
+    const orderPhone = o.customerPhone.replace(/\D/g, '');
+    return (orderName.includes(nameInput) || nameInput.includes(orderName)) && orderPhone.includes(phoneInput);
+  });
+
+  if (foundOrder) {
+    loginSuccess({ name: foundOrder.customerName, phone: foundOrder.customerPhone }, 'cliente');
+    renderCustomerOrders();
   } else {
-    showToast('Nenhuma ordem encontrada para esses dados', 'error');
+    showToast('Dados não encontrados. Verifique o nome e telefone.', 'error');
   }
 }
 
@@ -190,7 +201,7 @@ function logout() {
 async function createOrder(e) {
   e.preventDefault();
   const newOrder = {
-    id: useFirebase ? null : Date.now().toString(),
+    // id será gerado pelo Firebase ou Date.now() abaixo
     device: document.getElementById('orderDevice').value,
     customerName: document.getElementById('orderCustomer').value,
     customerPhone: document.getElementById('orderPhone').value,
@@ -206,11 +217,9 @@ async function createOrder(e) {
   // Se estiver usando Firebase, garante que o createdAt seja um formato comparável
   if (useFirebase) {
     newOrder.createdAt = firebase.firestore.Timestamp.now().toDate().toISOString();
-  }
-
-  if (useFirebase) {
     await db.collection("orders").add(newOrder);
   } else {
+    newOrder.id = Date.now().toString();
     orders.unshift(newOrder);
     saveData();
   }
