@@ -24,6 +24,26 @@
   </svg>
   Fale Conosco
 </a>
+  <!-- ============================================
+     MODAL DE RECIBO DIGITAL
+     ============================================ -->
+<div id="receiptModal" class="modal-overlay">
+  <div class="modal" style="max-width: 500px;">
+    <div class="modal-title" style="text-align:center;">✅ Recibo Digital</div>
+    
+    <div id="receiptContent" style="background: white; border: 2px dashed #e2e8f0; border-radius: var(--radius); padding: 1.5rem; margin: 1rem 0; max-height: 60vh; overflow-y: auto;"></div>
+
+    <div class="modal-footer" style="gap: 0.75rem;">
+      <button id="btnCloseReceipt" class="btn btn-outline">Fechar</button>
+      <button id="btnSendWhatsApp" class="btn btn-outline" style="background:#25D366; color:white; border:none;">
+        📱 Enviar via WhatsApp
+      </button>
+      <button id="btnPrintReceipt" class="btn btn-primary">
+        🖨️ Imprimir
+      </button>
+    </div>
+  </div>
+</div>
 </head>
   <!-- ============================================
      MODAL DE FINALIZAÇÃO DE ORDEM
