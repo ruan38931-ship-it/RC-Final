@@ -1340,4 +1340,39 @@ select {
     height: 52px;
     font-size: 13px;
   }
+   /* ============================================
+   FORMAS DE PAGAMENTO
+   ============================================ */
+.payment-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+.payment-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 2px solid #e2e8f0;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+}
+
+.payment-option input[type="radio"] {
+  margin: 0;
+}
+
+.payment-option:hover {
+  border-color: var(--primary);
+  background: #fef2f2;
+}
+
+.payment-option:has(input:checked) {
+  border-color: var(--primary);
+  background: #fef2f2;
+  font-weight: 600;
+}
 }
