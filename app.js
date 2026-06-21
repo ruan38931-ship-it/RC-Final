@@ -3,12 +3,12 @@
  * Substitua os valores abaixo pelas suas credenciais do Firebase Console
  */
 const firebaseConfig = {
-   apiKey: "AIzaSyBl-i7mqXXHs1OZwWxHORzTmRi0-KEquBA",
-  authDomain: "rc-celulares-3e650.firebaseapp.com",
-  projectId: "rc-celulares-3e650",
-  storageBucket: "rc-celulares-3e650.firebasestorage.app",
-  messagingSenderId: "688153532720",
-  appId: "1:688153532720:web:41d1473a48788227c8d0f5"
+  apiKey: "SUA_API_KEY",
+  authDomain: "SEU_PROJETO.firebaseapp.com",
+  projectId: "SEU_PROJETO_ID",
+  storageBucket: "SEU_PROJETO.appspot.com",
+  messagingSenderId: "SEU_SENDER_ID",
+  appId: "SEU_APP_ID"
 };
 
 // Inicializa o Firebase
