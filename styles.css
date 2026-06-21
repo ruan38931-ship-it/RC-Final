@@ -1315,14 +1315,27 @@ select {
   align-items: center;
   gap: 0.75rem;
   font-weight: 700;
-  box-shadow: var(--shadow-2xl);
+  box-shadow: 0 4px 12px rgba(37, 211, 102, 0.4);
   z-index: 1000;
   text-decoration: none;
-  transition: transform 0.2s;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  border: none;
+  animation: floatButton 3s ease-in-out infinite;
 }
 
 .fale-conosco-btn:hover {
-  transform: scale(1.05);
+  transform: scale(1.1) translateY(-5px);
+  box-shadow: 0 8px 20px rgba(37, 211, 102, 0.6);
+}
+
+.fale-conosco-btn:active {
+  transform: scale(0.95);
+}
+
+@keyframes floatButton {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
 }
 
 .grid-2 {
